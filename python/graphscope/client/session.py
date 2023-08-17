@@ -1462,7 +1462,7 @@ class Session(object):
             json.dumps(config).encode("utf-8", errors="ignore")
         ).decode("utf-8", errors="ignore")
         handle, config, endpoints = self._grpc_client.create_learning_instance(
-            graph.vineyard_id, handle, config
+            graph.vineyard_id, handle, config, message_pb2.LearningBackend.GRAPHLEARN
         )
 
         handle = json.loads(base64.b64decode(handle).decode("utf-8", errors="ignore"))
@@ -1471,6 +1471,33 @@ class Session(object):
 
         # construct learning graph
         g = LearningGraph(graph, handle, config, graph.vineyard_id)
+        self._learning_instance_dict[graph.vineyard_id] = g
+        graph._attach_learning_instance(g)
+        return g
+
+    def graphlearn_torch(self, graph):
+        from graphscope.learning.gl_torch_graph import GLTorchGraph
+
+        handle = {
+            "master_addr": "localhost",
+            "num_servers": 1,
+            "num_clients": 1,
+        }
+        handle = base64.b64encode(
+            json.dumps(handle).encode("utf-8", errors="ignore")
+        ).decode("utf-8", errors="ignore")
+
+        config = {}
+        config = base64.b64encode(
+            json.dumps(config).encode("utf-8", errors="ignore")
+        ).decode("utf-8", errors="ignore")
+        handle, config, endpoints = self._grpc_client.create_learning_instance(
+            graph.vineyard_id,
+            handle,
+            config,
+            message_pb2.LearningBackend.GRAPHLEARN_TORCH,
+        )
+        g = GLTorchGraph(endpoints)
         self._learning_instance_dict[graph.vineyard_id] = g
         graph._attach_learning_instance(g)
         return g
@@ -1818,3 +1845,11 @@ def graphlearn(graph, nodes=None, edges=None, gen_labels=None):
     return graph._session.graphlearn(
         graph, nodes, edges, gen_labels
     )  # pylint: disable=protected-access
+
+
+def graphlearn_torch(graph):
+    assert graph is not None, "graph cannot be None"
+    assert (
+        graph._session is not None
+    ), "The graph object is invalid"  # pylint: disable=protected-access
+    return graph._session.graphlearn_torch(graph)  # pylint: disable=protected-access
