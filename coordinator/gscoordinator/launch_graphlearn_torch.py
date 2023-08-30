@@ -17,34 +17,21 @@
 #
 
 import base64
-import json
 import logging
 import os.path as osp
+import pickle
 import sys
 
 import graphscope.learning.graphlearn_torch as glt
 import torch
 
 logger = logging.getLogger("graphscope")
-logger.setLevel(logging.INFO)
-
-log_file = "/root/examples/gs.log"
-file_handler = logging.FileHandler(log_file)
-file_handler.setLevel(logging.INFO)
-
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
 
 
 def decode_arg(arg):
     if isinstance(arg, dict):
         return arg
-    return json.loads(
-        base64.b64decode(arg.encode("utf-8", errors="ignore")).decode(
-            "utf-8", errors="ignore"
-        )
-    )
+    return pickle.loads(base64.b64decode(arg))
 
 
 def run_server_proc(proc_rank, handle, config, server_rank, dataset):
@@ -58,26 +45,20 @@ def run_server_proc(proc_rank, handle, config, server_rank, dataset):
         num_rpc_threads=16,
         # server_group_name="dist_train_supervised_sage_server",
     )
-
     logger.info(f"-- [Server {server_rank}] Waiting for exit ...")
     glt.distributed.wait_and_shutdown_server()
     logger.info(f"-- [Server {server_rank}] Exited ...")
 
 
 def launch_graphlearn_torch_server(handle, config, server_rank):
-    # TODO(hongyi): hard code arxiv for test now
-    dataset_name = "ogbn-arxiv"
-    dataset_root_dir = "/root/arxiv"
-    root_dir = osp.join(osp.dirname(osp.realpath(__file__)), dataset_root_dir)
-    dataset = glt.distributed.DistDataset()
-    dataset.load(
-        root_dir=osp.join(root_dir, f"{dataset_name}-partitions"),
-        partition_idx=0,
-        graph_mode="CPU",
-        feature_with_gpu=False,
-        whole_node_label_file=osp.join(root_dir, f"{dataset_name}-label", "label.pt"),
-    )
+    logger.info(f"-- [Server {server_rank}] Initializing server ...")
 
+    dataset = glt.distributed.DistDataset()
+    dataset.load_vineyard(
+        vineyard_id=str(handle["vineyard_id"]),
+        vineyard_socket=handle["vineyard_socket"],
+        **config,
+    )
     logger.info(f"-- [Server {server_rank}] Initializing server ...")
 
     torch.multiprocessing.spawn(
@@ -96,4 +77,8 @@ if __name__ == "__main__":
     handle = decode_arg(sys.argv[1])
     config = decode_arg(sys.argv[2])
     server_index = int(sys.argv[3])
+
+    logger.info(
+        f"launch_graphlearn_torch_server handle: {handle} config: {config} server_index: {server_index}"
+    )
     launch_graphlearn_torch_server(handle, config, server_index)

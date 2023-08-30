@@ -326,18 +326,14 @@ class LocalLauncher(AbstractLauncher):
         return server_list
 
     def _create_graphlearn_torch_instance(self, object_id, handle, config):
-        handle = json.loads(
-            base64.b64decode(handle.encode("utf-8", errors="ignore")).decode(
-                "utf-8", errors="ignore"
-            )
-        )
+        import pickle
+
+        handle = pickle.loads(base64.b64decode(handle))
 
         server_client_master_port = get_free_port("localhost")
         handle["server_client_master_port"] = server_client_master_port
 
-        handle = base64.b64encode(
-            json.dumps(handle).encode("utf-8", errors="ignore")
-        ).decode("utf-8", errors="ignore")
+        handle = base64.b64encode(pickle.dumps(handle))
 
         # launch the server
         env = os.environ.copy()
@@ -359,7 +355,7 @@ class LocalLauncher(AbstractLauncher):
                 config,
                 str(index),
             ]
-            logger.debug("launching graphlearn_torch server: %s", " ".join(cmd))
+            logger.debug("launching graphlearn_torch server: %s", " ".join(str(cmd)))
 
             proc = subprocess.Popen(
                 cmd,

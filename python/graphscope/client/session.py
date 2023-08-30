@@ -1475,22 +1475,37 @@ class Session(object):
         graph._attach_learning_instance(g)
         return g
 
-    def graphlearn_torch(self, graph):
+    def graphlearn_torch(
+        self,
+        graph,
+        edges,
+        edge_weights=None,
+        node_features=None,
+        edge_features=None,
+        node_labels=None,
+    ):
         from graphscope.learning.gl_torch_graph import GLTorchGraph
 
         handle = {
+            "vineyard_socket": self._engine_config["vineyard_socket"],
+            "vineyard_id": graph.vineyard_id,
+            "fragments": graph.fragments,
             "master_addr": "localhost",
             "num_servers": 1,
             "num_clients": 1,
         }
-        handle = base64.b64encode(
-            json.dumps(handle).encode("utf-8", errors="ignore")
-        ).decode("utf-8", errors="ignore")
+        import pickle
 
-        config = {}
-        config = base64.b64encode(
-            json.dumps(config).encode("utf-8", errors="ignore")
-        ).decode("utf-8", errors="ignore")
+        handle = base64.b64encode(pickle.dumps(handle))
+        # TODO(hongyi): check parameters and automatically load potential label/weight before launching servers
+        config = {
+            "edges": edges,
+            "edge_weights": edge_weights,
+            "node_features": node_features,
+            "edge_features": edge_features,
+            "node_labels": node_labels,
+        }
+        config = base64.b64encode(pickle.dumps(config))
         handle, config, endpoints = self._grpc_client.create_learning_instance(
             graph.vineyard_id,
             handle,
@@ -1847,9 +1862,18 @@ def graphlearn(graph, nodes=None, edges=None, gen_labels=None):
     )  # pylint: disable=protected-access
 
 
-def graphlearn_torch(graph):
+def graphlearn_torch(
+    graph,
+    edges,
+    edge_weights=None,
+    node_features=None,
+    edge_features=None,
+    node_labels=None,
+):
     assert graph is not None, "graph cannot be None"
     assert (
         graph._session is not None
     ), "The graph object is invalid"  # pylint: disable=protected-access
-    return graph._session.graphlearn_torch(graph)  # pylint: disable=protected-access
+    return graph._session.graphlearn_torch(
+        graph, edges, edge_weights, node_features, edge_features, node_labels
+    )  # pylint: disable=protected-access
